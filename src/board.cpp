@@ -494,8 +494,8 @@ bool Board::make_move(Move m, StateInfo &st) {
     sideToMove = opposite(sideToMove);
     if (sideToMove == WHITE) ++fullmoveNumber;
 
-    // legality: king not in check
-    if (in_check(opposite(sideToMove))) return true;
+    // legality: own king must not be in check
+    if (!in_check(opposite(sideToMove))) return true;
     // Undo if illegal
     unmake_move(st);
     return false;
@@ -541,5 +541,27 @@ void Board::unmake_move(const StateInfo &st) {
             put_piece(opposite(sideToMove), captured, (Square)to);
         }
     }
+}
+
+void Board::make_null(StateInfo &st) {
+    st.zobrist = zobrist;
+    st.castlingRights = castlingRights;
+    st.epSquare = epSquare;
+    st.halfmoveClock = halfmoveClock;
+    st.capturedPiece = NO_PIECE_TYPE;
+    st.move = 0;
+    // side key
+    zobrist ^= zkeys_.side;
+    if (epSquare >= 0) zobrist ^= zkeys_.epFile[FILE_OF((Square)epSquare)];
+    epSquare = -1;
+    sideToMove = opposite(sideToMove);
+}
+
+void Board::unmake_null(const StateInfo &st) {
+    sideToMove = opposite(sideToMove);
+    zobrist = st.zobrist;
+    castlingRights = st.castlingRights;
+    epSquare = st.epSquare;
+    halfmoveClock = st.halfmoveClock;
 }
 

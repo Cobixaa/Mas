@@ -1,6 +1,7 @@
 #include "search.h"
 #include "eval.h"
 #include <algorithm>
+#include <cstring>
 
 Searcher::Searcher() {
     tt.resize_mb(64);
@@ -45,8 +46,9 @@ void Searcher::order_moves(Board &b, std::vector<Move> &moves, Move ttMove, Move
         bool capA = is_capture(a), capC = is_capture(c);
         if (capA != capC) return capA; // captures first
         if (capA) return mvv_lva(a, b) > mvv_lva(c, b);
-        int ha = history[piece_of(a)&1][from_sq(a)][to_sq(a)];
-        int hc = history[piece_of(c)&1][from_sq(c)][to_sq(c)];
+        int stm = b.side();
+        int ha = history[stm][from_sq(a)][to_sq(a)];
+        int hc = history[stm][from_sq(c)][to_sq(c)];
         if (ha != hc) return ha > hc;
         if (a == killerMoves[0][ply]) return true;
         if (c == killerMoves[0][ply]) return false;
@@ -81,6 +83,8 @@ int Searcher::qsearch(Board &b, int alpha, int beta, int ply) {
 }
 
 int Searcher::search_impl(Board &b, int depth, int alpha, int beta, int ply, bool cutNode, Move parentMove) {
+    int originalAlpha = alpha;
+    int originalBeta = beta;
     if (time_up()) stopFlag = true;
     if (stopFlag) return 0;
     bool inCheck = b.in_check(b.side());
@@ -103,6 +107,19 @@ int Searcher::search_impl(Board &b, int depth, int alpha, int beta, int ply, boo
         else if (te.flag == TT_ALPHA && tts <= alpha) return alpha;
         else if (te.flag == TT_BETA && tts >= beta) return beta;
         ttMove = te.bestMove;
+    }
+
+    // Static evaluation for pruning
+    int staticEval = evaluate(b);
+
+    // Null-move pruning (disable in check and shallow depths)
+    if (!inCheck && depth >= 3 && staticEval >= beta) {
+        StateInfo st{};
+        b.make_null(st);
+        int R = 2 + (depth > 6);
+        int score = -search_impl(b, depth - 1 - R, -beta, -beta + 1, ply + 1, true, 0);
+        b.unmake_null(st);
+        if (score >= beta) return score;
     }
 
     std::vector<Move> moves; moves.reserve(256);
@@ -129,6 +146,15 @@ int Searcher::search_impl(Board &b, int depth, int alpha, int beta, int ply, boo
         bool isCapture = is_capture(moves[i]);
         bool isCheck = b.in_check(b.side());
         bool quiet = !isCapture && !isCheck;
+
+        // Futility pruning for quiets at shallow depth
+        if (!inCheck && quiet && depth <= 2) {
+            int margin = 100 * depth;
+            if (staticEval + margin <= alpha) {
+                b.unmake_move(st);
+                continue;
+            }
+        }
 
         if (legalCount > 1 && quiet && depth >= 3) {
             // LMR
@@ -181,10 +207,15 @@ int Searcher::search_impl(Board &b, int depth, int alpha, int beta, int ply, boo
         }
     }
 
-    // store TT
-    uint8_t flag = TT_EXACT;
-    if (bestScore <= alpha) flag = TT_ALPHA; // after loop, alpha equals bestScore
-    if (bestScore >= beta) flag = TT_BETA;
+    // store TT (use original window)
+    uint8_t flag;
+    if (bestScore <= originalAlpha) {
+        flag = TT_ALPHA;
+    } else if (bestScore >= originalBeta) {
+        flag = TT_BETA;
+    } else {
+        flag = TT_EXACT;
+    }
     int stt = score_to_tt(bestScore, ply);
     tt.store(b.key(), depth, stt, flag, bestMove);
     return bestScore;
@@ -216,8 +247,8 @@ SearchResult Searcher::search(Board &b, const SearchLimits &limits) {
         while (true) {
             score = search_impl(b, rootDepth, alpha, beta, 0, false, 0);
             if (stopFlag) break;
-            if (score <= alpha) { alpha -= 100; continue; }
-            if (score >= beta)  { beta  += 100; continue; }
+            if (score <= alpha) { alpha -= 150; continue; }
+            if (score >= beta)  { beta  += 150; continue; }
             break;
         }
         if (stopFlag) break;

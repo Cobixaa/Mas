@@ -38,6 +38,8 @@ public:
 
     bool make_move(Move m, StateInfo &st);
     void unmake_move(const StateInfo &st);
+    void make_null(StateInfo &st);
+    void unmake_null(const StateInfo &st);
 
     void generate_legal_moves(std::vector<Move> &out) const;
     void generate_captures(std::vector<Move> &out) const;
