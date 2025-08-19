@@ -74,14 +74,20 @@ pkg install -y clang git
 
 ```bash
 cd ~
-git clone https://example.com/your/maschess.git maschess
-cd maschess
+git clone https://github.com/Cobixaa/Mas.git
+cd Mas
 ```
 
 5) Compile (ARM64 phones):
 
 ```bash
-clang++ -O3 -DNDEBUG -flto -std=c++20 -pthread -march=armv8-a+crypto -mtune=native -s -o maschess src/*.cpp
+clang++ -O3 -DNDEBUG -flto -std=c++20 -pthread -mcpu=native -mtune=native -s -o maschess src/*.cpp
+```
+
+If `-mcpu=native` is not supported, try:
+
+```bash
+clang++ -O3 -DNDEBUG -flto -std=c++20 -pthread -march=armv8-a -s -o maschess src/*.cpp
 ```
 
 If you have a 32-bit device (rare), try:
